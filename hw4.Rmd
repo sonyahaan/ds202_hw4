@@ -1,5 +1,6 @@
 ---
 title: "hw4.Rmd"
+author: Sonya Haan
 output: html_document
 ---
 
@@ -7,22 +8,87 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Homework #4
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+Loading the data set and necessary libraries. Initial inspection of the data set.
+```{r}
+library(dplyr)
+library(ggplot2)
+data("ChickWeight")
+head(ChickWeight)
+str(ChickWeight)
 ```
 
-## Including Plots
+(@) Get a frequency breakdown of the number of chicks, their average weight and the standard deviation of the weights in each of the diets at the start of the study. Store the resulting data frame in a variable named weight0 and print.
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+weight0 <- ChickWeight %>% filter(Time == 0) %>% group_by(Diet) %>% summarize(num_chicks = n(), meanweight = mean(weight, na.rm = TRUE), standard_deviation_weight = sd(weight, na.rm = TRUE))   
+weight0
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Because we want data from the start of the study, we filter the data frame to get a subset where `Time == 0`. Then, we want the data frame `weight0` to contain the following information for each diet: the number of chicks, their average weight, and the standard deviation of the weights. 
+
+(@) Each chick should have twelve weight measurements. Use the dplyr package to identify how many measurements are there for each chick. Extract a subset of the data for all chicks with complete information, name the data set complete, and print the first 3 rows. (Hint: you might want to use mutate to introduce a helper variable consisting of the number of observations)
+```{r}
+ChickWeight <- ChickWeight %>% group_by(Chick) %>% mutate(num_obs = n())
+complete <- ChickWeight %>% filter(num_obs==12) %>% select(weight:Diet)
+head(complete, 3)
+```
+
+First we introduce a variable `num_obs` in the `ChickWeight` data frame to represent the number of observations for each chick. Then we create a new data frame `complete` which filters out all records of chicks with less than 12 observations (because said chicks have incomplete data), and selects all columns except for our helper variable `num_obs`.
+
+(@) In the complete data set introduce a new variable that measures the current weight difference compared to day 0. Name this variable  weightgain and print the first 3 rows of the new data frame.
+
+```{r}
+completeWG <- complete %>% group_by(Chick) %>% mutate(weightgain = weight - weight[Time==0])
+head(completeWG, 3)
+```
+
+We create a new data frame `completeWG` which includes the `weightgain` column. We calculate the value for this column by subtracting the `weight` on day 0 (when `Time==0`) from the current `weight` for each chick.
+
+(@) Use {ggplot2} to create side-by-side boxplots of weightgain by Diet for day 21. Describe the relationship in 2-3 sentences. Change the order of the categories in the Diet variable such that the boxplots are ordered by median weightgain, and the lower limit of the y axis should be 0.
+
+```{r}
+day21WG <- completeWG %>% filter(Time==21)
+ggplot(day21WG) + geom_boxplot(aes(x=reorder(day21WG$Diet, day21WG$weightgain, FUN=median), y=weightgain)) + xlab("Diet") + ylab("Weight Gain") + ggtitle("Weight Gain by Diet on Day 21") + ylim(c(0, 350))
+```
+
+The `Diet`'s in order by median `weightgain` from smallest to largest are: Diet 1, Diet 2, Diet 4, Diet 3. The median `weightgain` for all `Diet`'s is greater than 100 but less than 250. The greatest difference in median `weightgain` is between Diet 3 and Diet 1 with the difference being approximately 115.
+
+(@) Answer the following question using numerical and graphical summary: Which chick gained the most weight and which gained the least weight? What diets were they on?
+
+```{r}
+ggplot(day21WG, aes(x=reorder(Chick, weightgain), y=weightgain)) + geom_point() + ggtitle("Chicks in order of Weight Gain (on day 21)") + ylab("Weight Gain") + xlab("Chick #")
+
+#day21WG[day21WG$weightgain==max(day21WG$weightgain), ]
+minWGchick <- day21WG %>% group_by(Time) %>% slice(which.min(weightgain))
+minWGchick
+maxWGchick <- day21WG %>% group_by(Time) %>% slice(which.max(weightgain))
+maxWGchick
+```
+
+The chick who gained the least weight was chick 24 who was on Diet 2. The chick who gained the most weight was chick 35 who was on Diet 3. 
+
+(@) For the chicks with the least and the most weight at time 0, plot their growth trajectories over time. 
+
+```{r}
+min0 <- complete %>% group_by(Time) %>% slice(which.min(weight)) %>% filter(Time==0)
+max0 <- complete %>% group_by(Time) %>% slice(which.max(weight)) %>% filter(Time==0)
+day0growth <- complete %>% filter(Chick==min0$Chick | Chick==max0$Chick)
+plot1 <- ggplot(day0growth, aes(x=Time, y=weight, color=Chick)) + geom_point() + ggtitle("Weight over Time for Chicks with Min/Max weight on Day 0")
+plot1
+```
+
+5 pts of extra credit: Add to the plot the average growth trajectory for all chicks (calculated as the mean weight for each chick at each time). How do the trajectories compare?
+
+```{r}
+avgGT <- complete %>% group_by(Time) %>% summarize(weight=mean(weight))
+plot1 + geom_point(data=avgGT,colour="red") + ggtitle("Weight over Time: Chicks with Min/Max day 0 weight vs mean weight of all Chicks")
+```
+
+The average weight of all chicks (shown in red on the scatterplot) was greater than the weight of Chick 3 and Chick 27 (chicks with max and min weight on day 0, respectively) for each Time after day 0. This would suggest that weight on day 0 alone is not a good indicator of weight gain over time (since there are chicks whose weight was greater than Chick 3 at each Time after day 0).
+
+
+(@) What else do you find interesting in the dataset? Show your exploratory analysis.
+
+I found it interesting that the chick that gained the least weight (chick 24) wasn't on the Diet with the lowest median weight gain. The Diet with the lowest median weight gain was Diet 1, but chick 24 was on Diet 2. (Exploratory analysis where I learned this fact was done in question 4 and 5.)
